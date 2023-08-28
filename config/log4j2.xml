@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="INFO" monitorInterval="30">
+    <Properties>
+        <Property name="basePath">./log</Property>
+        <Property name="LOG_PATTERN">[%t] %d{dd/MM/yyyy HH:mm:ss.S} %5p %c{1} (%L): %m%n</Property>
+    </Properties>
+
+    <Appenders>
+        <Console name="CONSOLE" target="SYSTEM_OUT" follow="true">
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+        </Console>
+
+        <RollingFile name="APP_LOG" fileName="${basePath}/app.log"
+                     filePattern="${basePath}/app.%d{yyyy-MM-dd}_%i.log.gz">
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="300MB"/>
+                <TimeBasedTriggeringPolicy/>
+            </Policies>
+            <DefaultRolloverStrategy max="10"/>
+        </RollingFile>
+
+        <Async name="ASYNC_APP_LOG">
+            <AppenderRef ref="APP_LOG"/>
+        </Async>
+
+        <RollingFile name="ERROR_LOG" fileName="${basePath}/error.log"
+                     filePattern="${basePath}/error-%i.log">
+            <LevelRangeFilter minLevel="ERROR" maxLevel="ERROR" onMatch="ACCEPT" onMismatch="DENY"/>
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="300MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="3"/>
+        </RollingFile>
+
+        <Async name="ASYNC_ERROR_LOG">
+            <AppenderRef ref="ERROR_LOG"/>
+        </Async>
+
+    </Appenders>
+
+    <Loggers>
+        <Root level="ALL">
+            <!-- Chay prod thi OFF log console tranh loi cao tai -->
+            <AppenderRef level="INFO" ref="CONSOLE"/>
+
+            <AppenderRef level="INFO" ref="ASYNC_APP_LOG"/>
+            <AppenderRef level="ERROR" ref="ASYNC_ERROR_LOG"/>
+        </Root>
+    </Loggers>
+</Configuration>

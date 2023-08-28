@@ -1,0 +1,83 @@
+
+pipeline {
+
+    agent any
+
+    tools {
+        maven '3.9.4'
+    }
+
+    environment {
+        GIT_BRANCH = 'master'
+        GIT_URL = 'git@github.com:stringeecom/techtalk2023-api-service.git'
+        IP = '35.240.157.99'
+        USER = 'centos'
+    }
+
+    stages {
+
+        stage('Git Checkout') {
+            steps {
+                git branch: "${GIT_BRANCH}", url: "${GIT_URL}", credentialsId: 'dautv-github-cred'
+            }
+        }
+
+        stage('Unit Test') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+
+        stage('Scan Code') {
+            steps {
+                withSonarQubeEnv('sonar-video-call-demo') {
+                    sh "mvn clean verify sonar:sonar -Dsonar.projectKey=videocallapi -Dsonar.projectName='videocallapi' -Dsonar.host.url=https://sonarqube.stringee.dev  -Dsonar.token=sqp_d08e497f4a8bb29631543a926cb604b661e57facd"
+                }
+            }
+        }
+
+        stage("Scan Code Result") {
+            steps {
+                timeout(time: 1, unit: 'HOURS') {
+                    script {
+                        def qg = waitForQualityGate()
+                        if (qg.status != 'OK') {
+                            error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn --version'
+                sh "mvn clean install"
+            }
+        }
+
+        stage('Create Image') {
+            environment {
+                GIT_COMMIT_REV = sh(returnStdout: true, script: "git log -n 1 --pretty=format:'%h'").trim()
+            }
+            steps {
+                sh "sudo docker build -t hub-server.stringee.io/video-call-api:${GIT_COMMIT_REV} ."
+                sh "sudo docker push hub-server.stringee.io/video-call-api:${GIT_COMMIT_REV}"
+            }
+        }
+
+        stage('Deploy K8s') {
+            environment {
+                GIT_COMMIT_REV = sh(returnStdout: true, script: "git log -n 1 --pretty=format:'%h'").trim()
+            }
+            steps {
+                sshagent(credentials: ['k8s-master_test-master-3']) {
+                    // Helm deploy
+                    sh 'ssh -o StrictHostKeyChecking=no ${USER}@${IP} -T "cd /data/tech-talk/stringee-helm-chart && git pull &&  helm upgrade --install video-demo-api ./tech-talk/video-demo-api --set image.tag=${GIT_COMMIT_REV} -n tech-talk"'
+                }
+            }
+        }
+
+    }
+
+}
